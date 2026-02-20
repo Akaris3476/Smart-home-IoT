@@ -11,6 +11,8 @@ public class Hub
 	private string SharedAccesKey { get; init; }
 	public static bool AlertStatus { get; set; }
 
+	private static readonly SemaphoreSlim _semaphore = new(1, 1);	
+	
 	private readonly ServiceClient _serviceClient;
 	
 	public Hub(HubSettings settings)
@@ -40,42 +42,59 @@ public class Hub
 
 	public async Task<CloudToDeviceMethodResult> DeviceMethodAlert()
 	{
-		if (AlertStatus)
-			return new CloudToDeviceMethodResult{Status = 400};
-
-		CloudToDeviceMethod method = new("turnOnAlert");
-		method.ResponseTimeout = TimeSpan.FromSeconds(10);
-		CloudToDeviceMethodResult response = await _serviceClient.InvokeDeviceMethodAsync(DeviceId, method);
-
-		if (response.Status == 200)
+		await _semaphore.WaitAsync();
+		try
 		{
-			AlertStatus = true;
-			await Task.Delay(7000);
-		}
+			if (AlertStatus)
+				return new CloudToDeviceMethodResult{Status = 400};
+
+			CloudToDeviceMethod method = new("turnOnAlert");
+			method.ResponseTimeout = TimeSpan.FromSeconds(10);
+			CloudToDeviceMethodResult response = await _serviceClient.InvokeDeviceMethodAsync(DeviceId, method);
+
+			if (response.Status == 200)
+			{
+				AlertStatus = true;
+				await Task.Delay(7000);
+			}
 		
-		AlertStatus = false;
-		return response;
+			return response;
+		}
+		finally
+		{
+			AlertStatus = false;
+			_semaphore.Release();
+		} 
+		
+
 
 	}
 	
 	public async Task<CloudToDeviceMethodResult> DeviceMethodXmas()
 	{
-		if (AlertStatus)
-			return new CloudToDeviceMethodResult{Status = 400};
-		
-		CloudToDeviceMethod method = new("xmasMelody");
-		method.ResponseTimeout = TimeSpan.FromSeconds(10);
-		CloudToDeviceMethodResult response = await _serviceClient.InvokeDeviceMethodAsync(DeviceId, method);
-			
-		if (response.Status == 200)
+		await _semaphore.WaitAsync();
+		try
 		{
-			AlertStatus = true;
-			await Task.Delay(14000);
-		}
-		
-		AlertStatus = false;
-		return response;
+			if (AlertStatus)
+				return new CloudToDeviceMethodResult { Status = 400 };
 
+			CloudToDeviceMethod method = new("xmasMelody");
+			method.ResponseTimeout = TimeSpan.FromSeconds(10);
+			CloudToDeviceMethodResult response = await _serviceClient.InvokeDeviceMethodAsync(DeviceId, method);
+
+			if (response.Status == 200)
+			{
+				AlertStatus = true;
+				await Task.Delay(14000);
+			}
+
+			return response;
+		}
+		finally
+		{
+			AlertStatus = false;
+			_semaphore.Release();
+		}
 	}
 	
 	
